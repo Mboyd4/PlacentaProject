@@ -1,0 +1,89 @@
+
+---
+title: "Placenta Project"
+output: html_document
+---
+
+Library
+```{r setup, echo=FALSE}
+##library====
+library (dplyr)
+library(tidyr)
+library(ggplot2)
+library(vtable)
+library(scales)
+library(tidyverse)
+library(ape)
+library(phytools)
+library(geiger)
+library(nlme)
+library(data.table)
+
+
+```
+
+Data
+```{r}
+#setting up main df
+main_df <- read.csv("main.csv", na.strings = c(" ", "", "NA"))
+
+#Remove rows that contain all NA
+main_df <- main_df[rowSums(is.na(main_df)) != ncol(main_df), ]
+
+records_10 <-main_df[main_df$RecordsWithDenominators >= 10,]
+
+#subsetting main df by mammals only 
+mammals <- records_10[records_10$Class == "Mammalia",]
+
+#reading in placenta interdigitation df (invasiveness)
+pl_int <- read.csv("placenta__more_interdigitation.csv", na.strings = c(" ", "", "NA"))
+colnames(pl_int)[which(names(pl_int) == "species")] <- "Species"
+
+#merge and anti merge mammals with placenta df to combine lh data with placenta invasiveness
+full_df <- merge(mammals, pl_int, by = "Species") #mammals is 102
+#merge yields 84 obs.
+antifull <- anti_join(mammals, pl_int, by= "Species") #anti_join yields 18 species
+
+```
+
+
+```{r}
+#tables for full_df to look at distribution of placenta data across mammals
+
+#placenta type distributed across orders
+#invasiveness by Order
+tab1 <- table(full_df$Order, full_df$placenta_invasiveness)
+tab1
+
+#interdigitation by Order
+tab2 <- table(full_df$Order, full_df$interdigitation_placenta)
+tab2
+
+pl_table <- full_df %>% 
+            group_by(Order) %>% 
+             count(pl_inv = (placenta_invasiveness), 
+                   pl_int = (interdigitation_placenta))
+
+
+  
+
+
+    
+```
+
+```{r} 
+#Phylogenies
+
+species_placenta <- full_df %>% select("Species")
+
+#issue importing mammals tree from github, only as txt file
+
+#mammals_phylo <- as.phylo(mammals.nwk)
+
+
+```
+
+
+
+
+

@@ -1,30 +1,40 @@
 
 ---
 title: "Placenta Project"
+date" "2022-12-09"
 output: html_document
 ---
 
-Library
-```{r setup, echo=FALSE}
-##library====
-library (dplyr)
-library(tidyr)
-library(ggplot2)
-library(vtable)
-library(scales)
-library(tidyverse)
-library(ape)
-library(phytools)
-library(geiger)
-library(nlme)
-library(data.table)
 
+
+Library
+```{r}
+library("tidyverse")
+library("janitor")
+library("hrbrthemes")
+library("psych")
+library("ggrepel")
+library("ggplot2")
+library("ggpubr")
+library("broom")
+library("AICcmodavg")
+library("ctv") 
+library("ape")
+library("phytools")
+library("phangorn")
+library("geiger")
+library("nlme")
+library("visreg")
+library("tidytree")
+library("ggthemes")
+library("wesanderson")
+library("kableExtra")
 
 ```
 
-Data
+#Data
 ```{r}
-#setting up main df
+#setting up main df (cancer data)
 main_df <- read.csv("main.csv", na.strings = c(" ", "", "NA"))
 
 #Remove rows that contain all NA
@@ -33,56 +43,387 @@ main_df <- main_df[rowSums(is.na(main_df)) != ncol(main_df), ]
 records_10 <-main_df[main_df$RecordsWithDenominators >= 10,]
 
 #subsetting main df by mammals only 
-mammals <- records_10[records_10$Class == "Mammalia",]
+mammalia <- records_10[records_10$Class == "Mammalia",]
 
-#reading in placenta interdigitation df (invasiveness)
-pl_int <- read.csv("placenta__more_interdigitation.csv", na.strings = c(" ", "", "NA"))
-colnames(pl_int)[which(names(pl_int) == "species")] <- "Species"
+#reading in placenta interdigitation data (invasiveness)
+pi <- read.csv("placenta__more_interdigitation.csv", na.strings = c(" ", "", "NA"))
 
-#merge and anti merge mammals with placenta df to combine lh data with placenta invasiveness
-full_df <- merge(mammals, pl_int, by = "Species") #mammals is 102
-#merge yields 84 obs.
-antifull <- anti_join(mammals, pl_int, by= "Species") #anti_join yields 18 species
+mammals <- read.newick("mammals_species.nwk") # phylogeny data mammalian species
+
 
 ```
 
-
+#Wrangling Data
 ```{r}
-#tables for full_df to look at distribution of placenta data across mammals
+##following Ashley's renaming of variables for placenta data
+pi2 <- pi %>% 
+  select(species, placenta_invasiveness, X.4, interdigitation_placenta, X.5)
+# Un-reverse score the numeric ordinal variables
+#DOUBLE CHECK THIS
+pi2$invade = pi2$X.4
+pi2$invade[pi2$invade == "1"] <- "4" # used 4 to get these values out of the way for renaming "3's" as "1's"
+pi2$invade[pi2$invade == "3"] <- "1"
+pi2$invade[pi2$invade == "4"] <- "3"
+pi2$digit = pi2$X.5
+pi2$digit[pi2$digit == "1"] <- "4" # same here
+pi2$digit[pi2$digit == "3"] <- "1"
+pi2$digit[pi2$digit == "4"] <- "3"
+#select variables with correctly scored numeric ordinal variables
+pi3 <- pi2 %>%
+  select(species, placenta_invasiveness, invade, interdigitation_placenta, digit)
 
-#placenta type distributed across orders
-#invasiveness by Order
-tab1 <- table(full_df$Order, full_df$placenta_invasiveness)
-tab1
+#renaming variables in neoplasia df for MAMMALS
+np2 <- mammalia %>%
+  select(Species, NeoplasiaFromAllSources, NeoplasiaPrevalence, Malignant, MalignancyPrevalence, PropMalignant) %>%
+  rename(species = "Species") %>%
+  rename(tot.neo = "NeoplasiaFromAllSources") %>%
+  rename(prev.neo = "NeoplasiaPrevalence") %>%
+  rename(tot.mal = "Malignant") %>%
+  rename(prev.mal = "MalignancyPrevalence") %>%
+  rename(mal.trans = "PropMalignant")
 
-#interdigitation by Order
-tab2 <- table(full_df$Order, full_df$interdigitation_placenta)
-tab2
+#merge and anti merge mammals with placenta df to combine cancer data with placenta invasiveness
+placentacancer <- merge(np2, pi3, by = "species") #mammals is 102
+#merge yields 84 mammalian species with complete cancer data and placenta data
 
-pl_table <- full_df %>% 
-            group_by(Order) %>% 
-             count(pl_inv = (placenta_invasiveness), 
-                   pl_int = (interdigitation_placenta))
+antiplacentacancer <- anti_join(np2, pi3, by= "species") #anti_join yields 18 species without full cancer data or placenta data
 
 
-  
+placentacancer$invade <- as.numeric(placentacancer$invade) # set rates as numeric
+placentacancer$digit <- as.numeric(placentacancer$digit)
+placentacancer$tot.neo <- as.numeric(placentacancer$tot.neo)
+placentacancer$prev.neo <- as.numeric(placentacancer$prev.neo)
+placentacancer$tot.mal <- as.numeric(placentacancer$tot.mal)
+placentacancer$prev.mal <- as.numeric(placentacancer$prev.mal)
+placentacancer$mal.trans <- as.numeric(placentacancer$mal.trans)
 
+#Renaming so graphs look nicer
+placentacancer$placenta_invasiveness[placentacancer$placenta_invasiveness == "epi"] <- "Epitheliochorial"
+placentacancer$placenta_invasiveness[placentacancer$placenta_invasiveness == "endo"] <- "Endotheliochorial"
+placentacancer$placenta_invasiveness[placentacancer$placenta_invasiveness == "hemo"] <- "Hemochorial"
 
-    
+placentacancer2 <- placentacancer %>%
+  mutate_all(funs(str_replace(.," ","_"))) # replace all spaces in species names with underscores to be consistent with phylogeny data
+
 ```
 
-```{r} 
-#Phylogenies
+#Phylogeny Wrangling
+```{r}
 
-species_placenta <- full_df %>% select("Species")
+# Phylogeny - Mammals + Placentas + Cancer (no Life History)
+species_placcancer <- placentacancer2 %>%
+  dplyr::select("species")
 
-#issue importing mammals tree from github, only as txt file
+mammals_list <- as.phylo(mammals)
 
-#mammals_phylo <- as.phylo(mammals.nwk)
+specmammal <- as.data.frame(mammals_list$tip.label)%>%
+  rename("species"="mammals_list$tip.label")
+
+specieslist <- merge(specmammal, species_placcancer, by.x = "species", by.y = "species") #merge yields 83 obs. 
+
+
+specieslist_v <- as.vector(specieslist$species)
+specieslist_k <- keep.tip(mammals, specieslist_v)
+
+#writing list of species as csv using phylo 
+write.csv(specieslist_v, "specieslist_v.csv", row.names = FALSE, col.names = TRUE)
+
+specieskept <- read.csv("specieslist_v.csv") #list of 83 species 
+
+#merge mammals and placenta cancer data 83 obs. 
+mammallist <- merge(specieskept, placentacancer2, by.x = "x", by.y = "species")%>%
+  rename("species"=x)
+
+#setting na to 0 and organizing
+mammallist1 <- mammallist
+mammallist1[is.na(mammallist1)] <- 0
+
+#phylo data in table format
+mammal.table <- as_tibble(mammals)
+as.phylo(mammals)
+
+```
+
+# Placental Invasion x Cancer ANOVAs
+```{r}
+# Malignant transformation as a function of placental invasion
+#Note: in my code placentacancer is equal to placentcancer1 in ashley's code.
+pmtanova <- aov(mal.trans ~ invade, data = placentacancer)
+summary(pmtanova) # 22 N/As
+
+# Malignancy prevalence as a function of placental invasion
+pmpanova <- aov(prev.mal ~ invade, data = placentacancer)
+summary(pmpanova)
+
+# Neoplasia prevalence as a function of placental invasion
+pnpanova <- aov(prev.neo ~ invade, data = placentacancer)
+summary(pnpanova)
 
 
 ```
 
+# Interdigitation x Cancer ANOVAs
+```{r}
+# Malignant transformation as a function of interdigitation
+imtanova <- aov(mal.trans ~ digit, data = placentacancer)
+summary(imtanova)
+
+# Malignancy prevalence as a function of interdigitation
+impanova <- aov(prev.mal ~ digit, data = placentacancer)
+summary(impanova)
+
+# Neoplasia prevalence as a function of interdigitation
+inpanova <- aov(prev.neo ~ digit, data = placentacancer)
+summary(inpanova)
+
+```
+
+
+# Invasion + Interdigitation x Cancer ANOVAs (additive testing)
+```{r}
+# Malignant transformation as a function of invasion + interdigitation
+pimtanova <- aov(mal.trans ~ invade + digit, data = placentacancer)
+summary(pimtanova)
+
+# Malignancy prevalence as a function of invasion + interdigitation
+pimpanova <- aov(prev.mal ~ invade + digit, data = placentacancer)
+summary(pimpanova)
+
+# Neoplasia prevalence as a function of invasion + interdigitation
+pinpanova <- aov(prev.neo ~ invade + digit, data = placentacancer)
+summary(pinpanova)
+
+```
+
+
+#Invasion * Interdigitation x Cancer ANOVAs (interaction testing)
+```{r}
+# Malignant transformation as a function of invasion * interdigitation
+pimtanova1 <- aov(mal.trans ~ invade * digit, data = placentacancer)
+summary(pimtanova1) #22 N/As
+
+# Malignancy prevalence as a function of invasion * interdigitation
+pimpanova1 <- aov(prev.mal ~ invade * digit, data = placentacancer)
+summary(pimpanova1)
+
+# Neoplasia prevalence as a function of invasion * interdigitation
+pinpanova1 <- aov(prev.neo ~ invade * digit, data = placentacancer)
+summary(pinpanova1)
+
+```
+
+# Invasion AICs
+```{r}
+
+# Malignant Transformation
+mtset <- list(pmtanova, pimtanova, pimtanova1)
+mtnames <- c("pmtanova", "pimtanova", "pimtanova1")
+aictab(mtset, modnames = mtnames)
+        #"pimtanova1",interaction model is the best fit.
+par(mfrow=c(2,2))
+plot(pimtanova1)
+par(mfrow=c(1,1))
+
+
+# Malignancy Prevalence
+mpset <- list(pmpanova, pimpanova, pimpanova1)
+mpnames <- c("pmpanova", "pimpanova", "pimpanova1")
+aictab(mpset, modnames = mpnames)
+      #"pimpanova", additive model is the best fit.
+par(mfrow=c(2,2))
+plot(pimpanova)
+par(mfrow=c(1,1))
+
+
+# Neoplasia Prevalence
+npset <- list(pnpanova, pinpanova, pinpanova1)
+npnames <- c("pnpanova", "pinpanova", "pinpanova1")
+aictab(npset, modnames = npnames)
+      #"pnpanova", solo model is the best fit
+par(mfrow=c(2,2))
+plot(pnpanova)
+par(mfrow=c(1,1))
+
+
+```
+
+
+# Interdigitation AICs
+```{r}
+
+
+# Malignant Transformation
+mtsetd <- list(imtanova, pimtanova, pimtanova1)
+mtnamesd <- c("imtanova", "pimtanova", "pimtanova1")
+aictab(mtsetd, modnames = mtnamesd)
+      #"imtanova", solo model is the best fit, interactive a close 2nd
+par(mfrow=c(2,2))
+plot(imtanova)
+par(mfrow=c(1,1))
+par(mfrow=c(2,2))
+plot(pimtanova1)
+par(mfrow=c(1,1))
+
+
+# Malignancy Prevalence
+mpsetd <- list(impanova, pimpanova, pimpanova1)
+mpnamesd <- c("impanova", "pimpanova", "pimpanova1")
+aictab(mpsetd, modnames = mpnamesd)
+      #"impanova", solo model is the best fit
+par(mfrow=c(2,2))
+plot(impanova)
+par(mfrow=c(1,1))
+
+
+# Neoplasia Prevalence
+npsetd <- list(inpanova, pinpanova, pinpanova1)
+npnamesd <- c("inpanova", "pinpanova", "pinpanova1")
+aictab(npsetd, modnames = npnamesd)
+      #"inpanova", solo model is the best fit
+par(mfrow=c(2,2))
+plot(inpanova)
+par(mfrow=c(1,1))
+
+```
+
+Color Palette
+```{r}
+#making color combos for aes
+earth <- c("#61bc36", "#365a54", "#444444")
+orange <- c("#FF8459", "#CC530A", "#94280A")
+blue <- c("#A8D5C0", "#599BA1", "#1E4E64")
+```
+
+
+Placentas & Cancer Graphs
+```{r}
+
+# Placental invasion x neoplasia prevalence
+
+placentacancer$placenta_invasiveness <- factor(placentacancer$placenta_invasiveness,levels = c("Epitheliochorial", "Endotheliochorial", "Hemochorial"))
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x = placenta_invasiveness, y = prev.neo, fill=placenta_invasiveness))+
+  ggtitle("Neoplasia Prevalence by Invasiveness")+
+  xlab("Placenta Invasiveness")+
+  ylab("Neoplasia %")+
+  theme_pander()+
+  scale_fill_manual(values = orange)+
+  theme(legend.position = "none")
+
+
+# Interdigitation x neoplasia prevalence
+
+placentacancer$interdigitation_placenta <- factor(placentacancer$interdigitation_placenta,levels = c("Villous", "Trabecular", "Labyrinthine"))
+
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x= interdigitation_placenta, y= prev.neo, fill=interdigitation_placenta))+
+  ggtitle("Neoplasia Prevalence by Interdigitation")+
+  xlab("Interdigitation Class")+
+  ylab("Neoplasia %")+
+  theme_pander()+
+  scale_fill_manual(values = blue)+
+  theme(legend.position = "none")
+
+
+# Placental invasion x malignancy prevalence
+
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x = placenta_invasiveness, y = prev.mal, fill=placenta_invasiveness))+
+  ggtitle("Malignancy Prevalence by Invasiveness")+
+  xlab("Placenta Invasiveness")+
+  ylab("Malignant %")+
+  theme_pander()+
+  scale_fill_manual(values = orange)+
+  theme(legend.position = "none")
+
+
+# Interdigitation x malignancy prevalence
+
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x= interdigitation_placenta, y= prev.mal, fill=interdigitation_placenta))+
+  ggtitle("Malignancy Prevalence by Interdigitation")+
+  xlab("Interdigitation Class")+
+  ylab("Malignant %")+
+  theme_pander()+
+  scale_fill_manual(values = blue)+
+  theme(legend.position = "none")
+
+
+
+# Placental invasion x malignant transformation rate
+
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x= placenta_invasiveness, y= mal.trans, fill=placenta_invasiveness))+
+  ggtitle("Rate of Malignant Transformation by Invasiveness")+
+  xlab("Placenta Invasiveness")+
+  ylab("Rate of Malignant Transformation")+
+  theme_pander(lp= "none")+
+  scale_fill_manual(values = orange)+
+  theme(legend.position = "none")
+
+
+
+
+# Interdigitation x malignant transformation rate
+
+placentacancer %>%
+  ggplot(.)+
+  geom_violin(aes(x= interdigitation_placenta, y= mal.trans, fill=interdigitation_placenta))+
+  ggtitle("Rate of Malignant Transformation by Interdigitation")+
+  xlab("Interdigitation Class")+
+  ylab("Rate of Malignant Transformation")+
+  theme_pander(lp="none")+
+  scale_fill_manual(values = blue)
+
+
+```
+
+
+Placental Invasion x Cancer Correlation Computations
+```{r}
+
+# Placental Invasion x Malignant Transformation
+invmal1 <- lm(placentacancer$invade ~ placentacancer$mal.trans)
+summary(invmal1)
+
+# Placental Invasion x Neoplasia Prevalence
+invneo1 <- lm(placentacancer$invade ~ placentacancer$prev.neo)
+summary(invneo1)
+
+# Placental Invasion x Malignancy Prevalence
+invmalprev1 <- lm(placentacancer$invade ~ placentacancer$prev.mal)
+summary(invmalprev1)
+
+```
+
+
+Interdigitation Correlation x Cancer Computations
+```{r}
+
+# Interdigitation x Malignant Transformation
+digmal1 <- lm(placentacancer$digit ~ placentacancer$mal.trans)
+summary(digmal1)
+
+# Interdigitation x Neoplasia Prevalence
+digneo1 <- lm(placentacancer$digit ~ placentacancer$prev.neo)
+summary(digneo1)
+
+# Interdigitation x Malignancy Prevalence
+digmalprev1 <- lm(placentacancer$digit ~ placentacancer$prev.mal)
+summary(digmalprev1)
+
+```
+
+PGLS - Placentas + Cancer (Brownian)
+```{r}
+#line 784
+
+```
 
 
 

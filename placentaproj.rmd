@@ -1,7 +1,7 @@
 
 ---
 title: "Placenta Project"
-date" "2022-12-09"
+date: "2022-12-09"
 output: html_document
 ---
 
@@ -74,9 +74,9 @@ pi3 <- pi2 %>%
 
 #renaming variables in neoplasia df for MAMMALS
 np2 <- mammalia %>%
-  select(Species, NeoplasiaFromAllSources, NeoplasiaPrevalence, Malignant, MalignancyPrevalence, PropMalignant) %>%
+  select(Species, NeoplasiaWithDenominators, NeoplasiaPrevalence, Malignant, MalignancyPrevalence, PropMalignant) %>%
   rename(species = "Species") %>%
-  rename(tot.neo = "NeoplasiaFromAllSources") %>%
+  rename(tot.neo = "NeoplasiaWithDenominators") %>%
   rename(prev.neo = "NeoplasiaPrevalence") %>%
   rename(tot.mal = "Malignant") %>%
   rename(prev.mal = "MalignancyPrevalence") %>%
@@ -408,7 +408,7 @@ Interdigitation Correlation x Cancer Computations
 # Interdigitation x Malignant Transformation
 digmal1 <- lm(placentacancer$digit ~ placentacancer$mal.trans)
 summary(digmal1)
-
+ 
 # Interdigitation x Neoplasia Prevalence
 digneo1 <- lm(placentacancer$digit ~ placentacancer$prev.neo)
 summary(digneo1)
@@ -419,8 +419,28 @@ summary(digmalprev1)
 
 ```
 
+#Practicing Linear Regressions
+```{r}
+#neoplasia prevalence vs adult_weight.g. linear regression
+lmNeoWeight = lm(formula = NeoplasiaPrevalence ~ adult_weight.g., data = mammalia)
+summary(lmNeoWeight)
+#neoplasiaprev vs adult weight plot with logarithmic adult weight! (does this work?)
+plot(log(mammalia$adult_weight.g.), mammalia$NeoplasiaPrevalence, pch = 16, col = "red") + abline(lmNeoWeight)
+
+#regression for malignancy prev and adult weight
+lmMalWeight = lm(formula = MalignancyPrevalence ~ adult_weight.g., data = mammalia)
+summary(lmMalWeight)
+
+plot(log(mammalia$adult_weight.g.), mammalia$MalignancyPrevalence, pch = 16, col = "blue") + abline(lmMalWeight)
+#regression plot (with log scale?)
+
+
+```
+
+
 PGLS - Placentas + Cancer (Brownian)
 ```{r}
+
 #line 784
 
 ```

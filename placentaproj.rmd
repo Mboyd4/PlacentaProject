@@ -382,6 +382,26 @@ placentacancer %>%
 
 
 ```
+```{r}
+
+##Interdigitation and Invasiveness X Neoplasia Prevalence
+
+placentacancer$inter_invade <- paste(placentacancer$placenta_invasiveness, placentacancer$interdigitation_placenta)
+
+placentacancer$inter_invade <- factor(placentacancer$inter_invade,levels = c("Epitheliochorial Labyrinthine", "Epitheliochorial Villous", "Epitheliochorial Trabecular", "Endotheliochorial Labyrinthine", "Endotheliochorial Villous", "Endotheliochorial Trabecular", "Hemochorial Labyrinthine", "Hemochorial Villous", "Hemochorial Trabecular"))
+
+#Interdigitation and Invasiveness X Neoplasia Prevalence (plot using geom_jitter)
+ggplot(placentacancer, aes(inter_invade, prev.neo)) + geom_jitter(position = position_jitter(width = 0.1, height = 0.1), colour = "red") + theme(axis.text.x = element_text(angle = 50, hjust=1))
+
+
+##Interdigitation and Invasiveness X Malignant transformation 
+ggplot(placentacancer, aes(inter_invade, mal.trans)) + geom_jitter(position = position_jitter(width = 0.1, height = 0.1), colour = "blue") + theme(axis.text.x = element_text(angle = 50, hjust=1))
+
+
+##Interdigitation and Invasiveness X Malignant Prevalence
+ggplot(placentacancer, aes(inter_invade, mal.trans)) + geom_jitter(position = position_jitter(width = 0.1, height = 0.1), colour = "blueviolet") + theme(axis.text.x = element_text(angle = 50, hjust=1))
+
+```
 
 
 Placental Invasion x Cancer Correlation Computations
